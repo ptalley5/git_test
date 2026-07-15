@@ -8,9 +8,6 @@ on:
 permissions:
   contents: read
 
-actions:
-  checkout:
-
 jobs:
   research:
     runs-on: ubuntu-latest
