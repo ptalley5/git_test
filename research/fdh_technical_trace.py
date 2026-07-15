@@ -28,6 +28,9 @@ SESSION.headers.update({
 TARGETS = {
     "nde_unknown_foundations_pdf": "https://web.archive.org/web/20170127090518id_/http://www.fdhvelocitel.com/wp-content/uploads/2016/08/NDE_Unknown-Foundations_2016.pdf",
     "anchor_rod_inspections_pdf": "https://web.archive.org/web/20170126235944id_/http://www.fdhvelocitel.com/wp-content/uploads/2016/08/Anchor-Rod-Inspections_2016.pdf",
+    "research_and_development": "https://web.archive.org/web/20150810040058id_/http://www.fdhvelocitel.com/services/research-development/",
+    "nondestructive_testing": "https://web.archive.org/web/20161019031250id_/http://www.fdhvelocitel.com/services/nondestructive-testing/",
+    "usace_dam_demonstration": "https://web.archive.org/web/20170126190626id_/http://www.fdhvelocitel.com/congressman-david-price-views-demonstration-of-fdhvs-nondestructive-technology-to-assess-usace-dams/",
     "mobile_software_article": "https://web.archive.org/web/20160110224755id_/http://www.fdhvelocitel.com/new-mobile-software-improves-climber-safety/",
     "tools_page": "https://web.archive.org/web/20150313122627id_/http://www.fdhvelocitel.com/resources/tools/",
     "white_papers_page": "https://web.archive.org/web/20150313122538id_/http://www.fdhvelocitel.com/resources/white-papers/",
@@ -40,10 +43,13 @@ TARGETS = {
 KEYWORDS = [
     "unknown foundation", "non-destructive", "nondestructive", "nde",
     "parallel seismic", "ultraseismic", "sonic echo", "impulse response",
+    "dispersive flexural", "dispersive pulse", "dispersive side sonic",
     "foundation depth", "foundation geometry", "foundation type",
     "magnetometer", "seismic", "radar", "gpr", "ground penetrating",
+    "patent", "patented", "inventor", "technology", "signal processing",
     "software", "mobile", "application", "algorithm", "database", "mapping",
     "cory bauer", "joseph borrelli", "delta oaks", "fdh velocitel",
+    "darrin holt", "robert douglas", "robert lindyberg", "laura guy",
 ]
 
 manifest = []
@@ -140,16 +146,14 @@ for label, url in TARGETS.items():
     keyword_findings(label, response.url, text)
     all_links.extend({"source": label, **link} for link in links)
 
-# Follow technical PDFs linked by the archived tools/white-paper/service pages.
+# Follow a bounded set of technical PDFs/pages directly linked by the archived materials.
 seen_urls = set(TARGETS.values())
 for item in all_links:
     href = item["href"]
     combined = (item["text"] + " " + href).lower()
-    if href in seen_urls:
+    if href in seen_urls or not href.startswith("http"):
         continue
-    if not href.startswith("http"):
-        continue
-    if not (href.lower().endswith(".pdf") or any(term in combined for term in ["foundation", "seismic", "inspection", "mapping", "tool", "white paper", "software"])):
+    if not (href.lower().endswith(".pdf") or any(term in combined for term in ["foundation", "seismic", "inspection", "mapping", "research", "nondestructive", "patent", "white paper", "software"])):
         continue
     seen_urls.add(href)
     label = "linked_" + str(len(seen_urls))
@@ -162,7 +166,7 @@ for item in all_links:
     else:
         text, _ = extract_html(label, response)
     keyword_findings(label, response.url, text)
-    if len(seen_urls) >= 25:
+    if len(seen_urls) >= 30:
         break
 
 (OUT / "fetch_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
@@ -170,7 +174,7 @@ for item in all_links:
 (OUT / "keyword_findings.json").write_text(json.dumps(findings, indent=2), encoding="utf-8")
 
 print("\n=== TARGETED TECHNICAL FINDINGS ===", flush=True)
-print(json.dumps(findings[:200], indent=2, ensure_ascii=False), flush=True)
+print(json.dumps(findings[:300], indent=2, ensure_ascii=False), flush=True)
 print("\n=== FETCH SUMMARY ===", flush=True)
 print(json.dumps(manifest, indent=2), flush=True)
 
@@ -181,8 +185,8 @@ summary = [
     f"Files/pages successfully fetched: {sum(1 for item in manifest if item.get('status') == 200)}",
     f"Keyword/context findings: {len(findings)}",
     "",
-    "Primary target: NDE_Unknown-Foundations_2016.pdf.",
-    "See text/, pdf/, keyword_findings.json, and fetch_manifest.json.",
+    "Primary sources include NDE_Unknown-Foundations_2016.pdf, the 2015 R&D page, the 2016 nondestructive-testing page, and the USACE demonstration article.",
+    "See text/, pdf/, keyword_findings.json, all_links.json, and fetch_manifest.json.",
 ]
 (OUT / "README.md").write_text("\n".join(summary), encoding="utf-8")
 print("\n".join(summary), flush=True)
