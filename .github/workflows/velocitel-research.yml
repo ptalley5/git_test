@@ -25,7 +25,9 @@ jobs:
         run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml pypdf
 
       - name: Collect and analyze public records
-        run: python research/velocitel_docket_research.py
+        run: |
+          python research/velocitel_docket_research.py
+          python research/velocitel_followup.py
 
       - name: Upload research evidence bundle
         if: always()
