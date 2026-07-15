@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
-"""Bounded open-source trace of historical FDH foundation technology."""
+"""Retrieve and analyze specific archived FDH Velocitel technical materials."""
 from __future__ import annotations
 
-import csv
 import hashlib
 import json
 import re
-import time
 from pathlib import Path
-from typing import Any
-from urllib.parse import quote, quote_plus, urljoin, urlparse
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
+from pypdf import PdfReader
 
 OUT = Path("fdh-technical-trace-output")
 RAW = OUT / "raw"
-SNAPS = OUT / "snapshots"
-for directory in (OUT, RAW, SNAPS):
+PDF = OUT / "pdf"
+TEXT = OUT / "text"
+for directory in (OUT, RAW, PDF, TEXT):
     directory.mkdir(parents=True, exist_ok=True)
 
 SESSION = requests.Session()
@@ -26,46 +25,38 @@ SESSION.headers.update({
     "Accept-Language": "en-US,en;q=0.9",
 })
 
-TERMS = [
-    "unknown foundation", "foundation investigation", "foundation mapping",
+TARGETS = {
+    "nde_unknown_foundations_pdf": "https://web.archive.org/web/20170127090518id_/http://www.fdhvelocitel.com/wp-content/uploads/2016/08/NDE_Unknown-Foundations_2016.pdf",
+    "anchor_rod_inspections_pdf": "https://web.archive.org/web/20170126235944id_/http://www.fdhvelocitel.com/wp-content/uploads/2016/08/Anchor-Rod-Inspections_2016.pdf",
+    "mobile_software_article": "https://web.archive.org/web/20160110224755id_/http://www.fdhvelocitel.com/new-mobile-software-improves-climber-safety/",
+    "tools_page": "https://web.archive.org/web/20150313122627id_/http://www.fdhvelocitel.com/resources/tools/",
+    "white_papers_page": "https://web.archive.org/web/20150313122538id_/http://www.fdhvelocitel.com/resources/white-papers/",
+    "engineering_inspections": "https://web.archive.org/web/20150817222033id_/http://www.fdhvelocitel.com/services/engineering/engineering-inspections/",
+    "geotechnical_engineering": "https://web.archive.org/web/20150817222038id_/http://www.fdhvelocitel.com/services/engineering/geotechnical-engineering/",
+    "structural_engineering": "https://web.archive.org/web/20150817222043id_/http://www.fdhvelocitel.com/services/engineering/structural-engineering/",
+    "services_page": "https://web.archive.org/web/20150313122631id_/http://www.fdhvelocitel.com/services/",
+}
+
+KEYWORDS = [
+    "unknown foundation", "non-destructive", "nondestructive", "nde",
     "parallel seismic", "ultraseismic", "sonic echo", "impulse response",
-    "foundation depth", "foundation geometry", "below grade", "buried foundation",
-    "tower mapping", "line and antenna mapping", "foundation software",
-    "proprietary software", "source code", "flash drive", "thumb drive", "usb drive",
-    "fdh engineering", "fdh velocitel", "delta oaks", "cory bauer", "joseph borrelli",
-]
-DOMAINS = [
-    "fdhengineering.com", "fdh-inc.com", "fdhvelocitel.com",
-    "fdh-is.com", "velocitel.com", "fdhinfrastructure.com",
-]
-QUERIES = [
-    '"FDH Engineering" "foundation investigation"',
-    '"FDH Velocitel" foundation software',
-    '"FDH" "parallel seismic" tower',
-    '"FDH" "unknown foundation" tower',
-    '"Cory Bauer" FDH tower',
-    '"Joseph Borrelli" FDH tower',
-    '"Delta Oaks" "parallel seismic"',
-    '"unknown foundation investigation" telecom tower',
-    '"tower foundation mapping" software',
-    '"FDH Infrastructure Services" foundation',
+    "foundation depth", "foundation geometry", "foundation type",
+    "magnetometer", "seismic", "radar", "gpr", "ground penetrating",
+    "software", "mobile", "application", "algorithm", "database", "mapping",
+    "cory bauer", "joseph borrelli", "delta oaks", "fdh velocitel",
 ]
 
-manifest: list[dict[str, Any]] = []
-hits: list[dict[str, Any]] = []
+manifest = []
+findings = []
 
 
-def safe(value: str) -> str:
-    return re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("_")[:160] or "item"
-
-
-def fetch(label: str, url: str, timeout: int = 12) -> requests.Response | None:
+def fetch(label: str, url: str) -> requests.Response | None:
     try:
-        response = SESSION.get(url, timeout=timeout, allow_redirects=True)
-        ctype = (response.headers.get("content-type") or "").lower()
-        suffix = ".html" if "html" in ctype else ".json" if "json" in ctype else ".xml" if "xml" in ctype else ".pdf" if "pdf" in ctype or response.content.startswith(b"%PDF") else ".bin"
-        path = RAW / f"{safe(label)}{suffix}"
-        path.write_bytes(response.content)
+        response = SESSION.get(url, timeout=45, allow_redirects=True)
+        content_type = (response.headers.get("content-type") or "").lower()
+        suffix = ".pdf" if "pdf" in content_type or response.content.startswith(b"%PDF") else ".html" if "html" in content_type else ".bin"
+        destination = (PDF if suffix == ".pdf" else RAW) / f"{label}{suffix}"
+        destination.write_bytes(response.content)
         manifest.append({
             "label": label,
             "requested_url": url,
@@ -74,179 +65,124 @@ def fetch(label: str, url: str, timeout: int = 12) -> requests.Response | None:
             "content_type": response.headers.get("content-type"),
             "bytes": len(response.content),
             "sha256": hashlib.sha256(response.content).hexdigest(),
-            "path": str(path),
+            "path": str(destination),
         })
-        print(label, response.status_code, len(response.content), response.url)
+        print("FETCH", label, response.status_code, len(response.content), response.url, flush=True)
         return response
     except Exception as exc:
         manifest.append({"label": label, "requested_url": url, "error": repr(exc)})
-        print(label, "ERROR", repr(exc))
+        print("ERROR", label, repr(exc), flush=True)
         return None
 
 
-def text_of(response: requests.Response) -> str:
-    raw = response.content.decode("utf-8", errors="replace")
-    if "html" in (response.headers.get("content-type") or "").lower() or "<html" in raw[:500].lower():
-        raw = BeautifulSoup(raw, "lxml").get_text(" ", strip=True)
-    return re.sub(r"\s+", " ", raw).strip()
+def extract_pdf(label: str, path: Path) -> str:
+    pages = []
+    try:
+        reader = PdfReader(str(path), strict=False)
+        for number, page in enumerate(reader.pages, start=1):
+            try:
+                page_text = page.extract_text() or ""
+            except Exception as exc:
+                page_text = f"[Extraction error on page {number}: {exc!r}]"
+            pages.append(f"\n\n===== PAGE {number} =====\n{page_text}")
+    except Exception as exc:
+        pages.append(f"[PDF reader error: {exc!r}]")
+    text = "".join(pages)
+    (TEXT / f"{label}.txt").write_text(text, encoding="utf-8", errors="replace")
+    return text
 
 
-def capture_hits(text: str, source: str, url: str) -> None:
-    lowered = text.lower()
-    for term in TERMS:
+def extract_html(label: str, response: requests.Response) -> tuple[str, list[dict[str, str]]]:
+    soup = BeautifulSoup(response.text, "lxml")
+    text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True)).strip()
+    links = []
+    for anchor in soup.find_all("a", href=True):
+        links.append({
+            "text": " ".join(anchor.get_text(" ", strip=True).split()),
+            "href": urljoin(response.url, anchor.get("href")),
+        })
+    (TEXT / f"{label}.txt").write_text(text, encoding="utf-8", errors="replace")
+    return text, links
+
+
+def keyword_findings(label: str, url: str, text: str) -> None:
+    lower = text.lower()
+    for keyword in KEYWORDS:
         start = 0
         count = 0
         while True:
-            index = lowered.find(term.lower(), start)
+            index = lower.find(keyword.lower(), start)
             if index < 0:
                 break
             count += 1
-            if count <= 6:
-                hits.append({
-                    "source": source,
+            if count <= 20:
+                findings.append({
+                    "source": label,
                     "url": url,
-                    "term": term,
+                    "keyword": keyword,
                     "offset": index,
-                    "snippet": text[max(0, index - 320):min(len(text), index + len(term) + 520)],
+                    "snippet": re.sub(r"\s+", " ", text[max(0, index - 450):min(len(text), index + len(keyword) + 850)]).strip(),
                 })
-            start = index + max(1, len(term))
+            start = index + max(1, len(keyword))
 
 
-search_results = []
-candidates: list[dict[str, str]] = []
-for number, query in enumerate(QUERIES, start=1):
-    url = "https://r.jina.ai/http://www.google.com/search?q=" + quote_plus(query)
-    response = fetch(f"search_{number}", url)
-    if not response:
+all_links = []
+for label, url in TARGETS.items():
+    response = fetch(label, url)
+    if not response or response.status_code != 200:
         continue
-    text = text_of(response)
-    capture_hits(text, f"search:{query}", response.url)
-    search_results.append({"query": query, "status": response.status_code, "url": response.url, "text": text[:100000]})
-    for match in re.finditer(r"https?://[^\s\])>\"']+", text):
-        href = match.group(0).rstrip(".,;:")
-        combined = href.lower()
-        if any(token in combined for token in ["fdh", "velocitel", "deltaoaks", "delta-oaks", "foundation", "parallel-seismic"]):
-            if not any(host in href for host in ["google.com/search", "r.jina.ai/http://www.google.com/search"]):
-                candidates.append({"href": href, "query": query})
-(OUT / "search_results.json").write_text(json.dumps(search_results, indent=2), encoding="utf-8")
+    saved_path = Path(manifest[-1]["path"])
+    if saved_path.suffix.lower() == ".pdf":
+        text = extract_pdf(label, saved_path)
+        links = []
+    else:
+        text, links = extract_html(label, response)
+    keyword_findings(label, response.url, text)
+    all_links.extend({"source": label, **link} for link in links)
 
-# Retrieve only the five most relevant archived URLs per candidate domain.
-wayback: dict[str, Any] = {}
-relevant_path = re.compile(r"foundation|tower|mapping|inspection|service|technology|software|seismic|engineering|capabilit|about|history", re.I)
-for domain_number, domain in enumerate(DOMAINS, start=1):
-    cdx_url = (
-        "https://web.archive.org/cdx/search/cdx?url=" + quote(domain + "/*", safe="")
-        + "&output=json&fl=timestamp,original,statuscode,mimetype,digest,length"
-        + "&filter=statuscode:200&collapse=urlkey&from=2010&to=2017"
-    )
-    response = fetch(f"cdx_{domain_number}_{domain}", cdx_url, timeout=20)
-    rows = None
-    if response:
-        try:
-            rows = response.json()
-        except Exception:
-            rows = None
-    wayback[domain] = rows
-    if not isinstance(rows, list) or len(rows) < 2:
+# Follow technical PDFs linked by the archived tools/white-paper/service pages.
+seen_urls = set(TARGETS.values())
+for item in all_links:
+    href = item["href"]
+    combined = (item["text"] + " " + href).lower()
+    if href in seen_urls:
         continue
-    header = rows[0]
-    records = [dict(zip(header, row)) for row in rows[1:] if len(row) == len(header)]
-    relevant = []
-    for record in records:
-        original = record.get("original", "")
-        path = urlparse(original).path or "/"
-        if relevant_path.search(original) or path in {"", "/", "/index.html", "/index.htm", "/home"}:
-            relevant.append(record)
-    relevant.sort(key=lambda item: (0 if relevant_path.search(item.get("original", "")) else 1, abs(int(item.get("timestamp", "20150000000000")[:4]) - 2015)))
-    chosen = []
-    seen_urls = set()
-    for record in relevant:
-        original = record.get("original", "")
-        if original in seen_urls:
-            continue
-        seen_urls.add(original)
-        chosen.append(record)
-        if len(chosen) == 5:
-            break
-    for snapshot_number, record in enumerate(chosen, start=1):
-        timestamp = record["timestamp"]
-        original = record["original"]
-        snapshot_url = f"https://web.archive.org/web/{timestamp}id_/{original}"
-        snapshot = fetch(f"snapshot_{domain_number}_{snapshot_number}_{timestamp}_{safe(original)}", snapshot_url, timeout=15)
-        if not snapshot or snapshot.status_code != 200:
-            continue
-        text = text_of(snapshot)
-        (SNAPS / f"{safe(domain)}_{timestamp}_{safe(original)}.txt").write_text(text, encoding="utf-8", errors="replace")
-        capture_hits(text, f"wayback:{domain}", original)
-(OUT / "wayback_cdx.json").write_text(json.dumps(wayback, indent=2), encoding="utf-8")
-
-research_results = []
-for query_number, query in enumerate([
-    '"FDH Engineering"', '"FDH Velocitel"', '"Cory Bauer" tower',
-    '"Joseph Borrelli" tower', '"unknown foundation" tower',
-    '"parallel seismic" telecommunications',
-], start=1):
-    encoded = quote_plus(query)
-    for source, url in [
-        ("patents", "https://patents.google.com/?q=" + encoded),
-        ("crossref", "https://api.crossref.org/works?query=" + encoded + "&rows=20"),
-    ]:
-        response = fetch(f"research_{query_number}_{source}", url, timeout=15)
-        if not response:
-            continue
-        text = text_of(response)
-        research_results.append({"query": query, "source": source, "status": response.status_code, "url": response.url, "text": text[:100000]})
-        capture_hits(text, f"research:{source}:{query}", response.url)
-(OUT / "research_results.json").write_text(json.dumps(research_results, indent=2), encoding="utf-8")
-
-# Bounded follow-up of URLs named in search text.
-unique_candidates = []
-seen = set()
-for candidate in candidates:
-    if candidate["href"] in seen:
+    if not href.startswith("http"):
         continue
-    seen.add(candidate["href"])
-    unique_candidates.append(candidate)
-(OUT / "external_candidates.json").write_text(json.dumps(unique_candidates, indent=2), encoding="utf-8")
-for index, candidate in enumerate(unique_candidates[:20], start=1):
-    response = fetch(f"external_{index}_{safe(candidate['href'])}", candidate["href"], timeout=10)
-    if response and response.status_code == 200:
-        capture_hits(text_of(response), "external", response.url)
-
-# Deduplicate and rank snippets.
-ranked = []
-seen_snippets = set()
-for hit in hits:
-    normalized = re.sub(r"\W+", " ", hit["snippet"].lower()).strip()[:350]
-    if normalized in seen_snippets:
+    if not (href.lower().endswith(".pdf") or any(term in combined for term in ["foundation", "seismic", "inspection", "mapping", "tool", "white paper", "software"])):
         continue
-    seen_snippets.add(normalized)
-    score = sum(1 for term in TERMS if term in hit["snippet"].lower())
-    if hit["term"].lower() in {"fdh engineering", "fdh velocitel", "cory bauer", "joseph borrelli", "unknown foundation", "parallel seismic", "foundation software"}:
-        score += 5
-    if hit["source"].startswith("wayback:"):
-        score += 3
-    ranked.append({"score": score, **hit})
-ranked.sort(key=lambda item: (-item["score"], item["source"], item["url"]))
+    seen_urls.add(href)
+    label = "linked_" + str(len(seen_urls))
+    response = fetch(label, href)
+    if not response or response.status_code != 200:
+        continue
+    saved_path = Path(manifest[-1]["path"])
+    if saved_path.suffix.lower() == ".pdf":
+        text = extract_pdf(label, saved_path)
+    else:
+        text, _ = extract_html(label, response)
+    keyword_findings(label, response.url, text)
+    if len(seen_urls) >= 25:
+        break
 
-(OUT / "keyword_hits.json").write_text(json.dumps(hits, indent=2), encoding="utf-8")
-(OUT / "ranked_hits.json").write_text(json.dumps(ranked[:1000], indent=2), encoding="utf-8")
-with (OUT / "ranked_hits.csv").open("w", newline="", encoding="utf-8") as handle:
-    writer = csv.DictWriter(handle, fieldnames=["score", "source", "url", "term", "offset", "snippet"])
-    writer.writeheader()
-    writer.writerows(ranked[:1000])
 (OUT / "fetch_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+(OUT / "all_links.json").write_text(json.dumps(all_links, indent=2), encoding="utf-8")
+(OUT / "keyword_findings.json").write_text(json.dumps(findings, indent=2), encoding="utf-8")
+
+print("\n=== TARGETED TECHNICAL FINDINGS ===", flush=True)
+print(json.dumps(findings[:200], indent=2, ensure_ascii=False), flush=True)
+print("\n=== FETCH SUMMARY ===", flush=True)
+print(json.dumps(manifest, indent=2), flush=True)
 
 summary = [
-    "# FDH technical trace",
+    "# Targeted FDH technical trace",
     "",
-    f"Fetch attempts: {len(manifest)}",
-    f"Raw term hits: {len(hits)}",
-    f"Unique ranked hits: {len(ranked)}",
-    f"Wayback domains with indexed captures: {sum(1 for value in wayback.values() if isinstance(value, list) and len(value) > 1)}",
-    f"Promising external candidates: {len(unique_candidates)}",
+    f"Targets attempted: {len(TARGETS)}",
+    f"Files/pages successfully fetched: {sum(1 for item in manifest if item.get('status') == 200)}",
+    f"Keyword/context findings: {len(findings)}",
     "",
-    "Inspect ranked_hits.json first, followed by wayback_cdx.json, research_results.json, search_results.json, and snapshots/.",
+    "Primary target: NDE_Unknown-Foundations_2016.pdf.",
+    "See text/, pdf/, keyword_findings.json, and fetch_manifest.json.",
 ]
 (OUT / "README.md").write_text("\n".join(summary), encoding="utf-8")
-print("\n".join(summary))
+print("\n".join(summary), flush=True)
