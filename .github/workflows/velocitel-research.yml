@@ -28,6 +28,7 @@ jobs:
         run: |
           python research/velocitel_docket_research.py
           python research/velocitel_followup.py
+          python research/velocitel_doc_probe.py
 
       - name: Upload research evidence bundle
         if: always()
