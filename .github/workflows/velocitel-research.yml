@@ -1,4 +1,4 @@
-name: Velocitel related-case public-record research
+name: FDH and Delta Oaks archived website research
 
 on:
   pull_request:
@@ -24,14 +24,14 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml pypdf
 
-      - name: Collect related and companion cases
-        run: python research/velocitel_related_cases.py
+      - name: Collect archived technical website pages
+        run: python research/fdh_website_archive_compact.py
 
-      - name: Upload related-case evidence
+      - name: Upload archived website evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: velocitel-related-cases
-          path: research-output/related-cases/
+          name: fdh-website-archive
+          path: research-output/fdh-website-archive/
           if-no-files-found: warn
           retention-days: 7
