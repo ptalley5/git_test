@@ -1,4 +1,4 @@
-name: FDH and Delta Oaks website archive trace
+name: FDH public patent PDF extraction
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 65
+    timeout-minutes: 35
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -22,16 +22,16 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml
+        run: python -m pip install --disable-pip-version-check requests pypdf
 
-      - name: Recover archived company service and technology pages
-        run: python research/fdh_website_archive_compact.py
+      - name: Download and extract FDH patent PDFs
+        run: python research/fdh_patent_pdf_download.py
 
-      - name: Upload website archive trace
+      - name: Upload patent PDFs and extracted text
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fdh-website-archive
-          path: research-output/fdh-website-archive/
+          name: fdh-patent-pdfs
+          path: research-output/fdh-patent-pdfs/
           if-no-files-found: warn
           retention-days: 7
