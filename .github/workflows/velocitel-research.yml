@@ -1,4 +1,4 @@
-name: Delta Oaks corrected early archive
+name: Other Velocitel former-employee cases
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -22,16 +22,16 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml pypdf
 
-      - name: Recover early Delta Oaks pages
-        run: python research/dog_early_archive_fixed.py
+      - name: Research other Velocitel former-employee cases
+        run: python research/velocitel_other_cases.py
 
-      - name: Upload early Delta Oaks evidence
+      - name: Upload other-case evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dog-early-archive-fixed
-          path: research-output/dog-early-archive-fixed/
+          name: velocitel-other-cases
+          path: research-output/velocitel-other-cases/
           if-no-files-found: warn
           retention-days: 7
