@@ -1,4 +1,4 @@
-name: FDH public patent PDF extraction
+name: Velocitel related-case public-record research
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -22,16 +22,16 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: python -m pip install --disable-pip-version-check requests pypdf
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml pypdf
 
-      - name: Download and extract FDH patent PDFs
-        run: python research/fdh_patent_pdf_download.py
+      - name: Collect related and companion cases
+        run: python research/velocitel_related_cases.py
 
-      - name: Upload patent PDFs and extracted text
+      - name: Upload related-case evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fdh-patent-pdfs
-          path: research-output/fdh-patent-pdfs/
+          name: velocitel-related-cases
+          path: research-output/related-cases/
           if-no-files-found: warn
           retention-days: 7
