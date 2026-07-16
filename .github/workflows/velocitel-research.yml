@@ -1,4 +1,4 @@
-name: FDH and Delta Oaks archived website research
+name: Velocitel exact public-archive probe
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -22,16 +22,16 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml pypdf
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml warcio
 
-      - name: Collect archived technical website pages
-        run: python research/fdh_website_archive_compact.py
+      - name: Probe exact public archive and crawl URLs
+        run: python research/velocitel_exact_archive.py
 
-      - name: Upload archived website evidence
+      - name: Upload exact archive evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fdh-website-archive
-          path: research-output/fdh-website-archive/
+          name: velocitel-exact-archive
+          path: research-output/velocitel-exact-archive/
           if-no-files-found: warn
           retention-days: 7
