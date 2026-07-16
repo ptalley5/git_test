@@ -1,4 +1,4 @@
-name: Velocitel free contact-route research
+name: Velocitel related-case research
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -22,16 +22,16 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml pypdf
 
-      - name: Find free contact and institutional access routes
-        run: python research/velocitel_contacts.py
+      - name: Research Velocitel companion and related cases
+        run: python research/velocitel_related_cases.py
 
-      - name: Upload contact-route research
+      - name: Upload related-case research
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: velocitel-free-contact-routes
-          path: research-output/free-contact-routes/
+          name: velocitel-related-cases
+          path: research-output/related-cases/
           if-no-files-found: warn
           retention-days: 7
