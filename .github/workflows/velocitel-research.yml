@@ -1,0 +1,37 @@
+name: Velocitel public upload and legal mirror search
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml
+
+      - name: Search public document uploads and legal mirrors
+        run: python research/velocitel_public_uploads.py
+
+      - name: Upload public-upload search evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: velocitel-public-uploads
+          path: research-output/velocitel-public-uploads/
+          if-no-files-found: warn
+          retention-days: 7
