@@ -1,4 +1,4 @@
-name: FDH patent and technical trace
+name: FDH and Delta Oaks website archive trace
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 65
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -24,14 +24,14 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml
 
-      - name: Trace FDH patents and technical publications
-        run: python research/fdh_patent_trace_compact.py
+      - name: Recover archived company service and technology pages
+        run: python research/fdh_website_archive_compact.py
 
-      - name: Upload patent trace
+      - name: Upload website archive trace
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fdh-patent-trace
-          path: research-output/fdh-patent-trace/
+          name: fdh-website-archive
+          path: research-output/fdh-website-archive/
           if-no-files-found: warn
           retention-days: 7
