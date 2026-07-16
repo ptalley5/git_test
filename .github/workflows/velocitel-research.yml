@@ -1,4 +1,4 @@
-name: Delta Oaks early website chronology
+name: Delta Oaks patent and IP trace
 
 on:
   pull_request:
@@ -24,14 +24,14 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml
 
-      - name: Recover earliest Delta Oaks website language
-        run: python research/dog_early_archive.py
+      - name: Search public patent and trademark indexes
+        run: python research/dog_patent_trace.py
 
-      - name: Upload Delta Oaks chronology evidence
+      - name: Upload Delta Oaks patent evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dog-early-archive
-          path: research-output/dog-early-archive/
+          name: dog-patent-trace
+          path: research-output/dog-patent-trace/
           if-no-files-found: warn
           retention-days: 7
