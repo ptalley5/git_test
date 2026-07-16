@@ -1,4 +1,4 @@
-name: Velocitel exact public-archive probe
+name: Delta Oaks early website chronology
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -22,16 +22,16 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml warcio
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml
 
-      - name: Probe exact public archive and crawl URLs
-        run: python research/velocitel_exact_archive.py
+      - name: Recover earliest Delta Oaks website language
+        run: python research/dog_early_archive.py
 
-      - name: Upload exact archive evidence
+      - name: Upload Delta Oaks chronology evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: velocitel-exact-archive
-          path: research-output/velocitel-exact-archive/
+          name: dog-early-archive
+          path: research-output/dog-early-archive/
           if-no-files-found: warn
           retention-days: 7
