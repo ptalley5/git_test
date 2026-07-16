@@ -11,7 +11,7 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 85
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -30,6 +30,7 @@ jobs:
           python research/velocitel_followup.py
           python research/velocitel_doc_probe.py
           python research/velocitel_free_options_exhaustive.py
+          python research/fdh_technical_trace2.py
 
       - name: Upload research evidence bundle
         if: always()
